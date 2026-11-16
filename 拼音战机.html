@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>拼音战机 · Pinyin Defense</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;min-height:100%;background:#050810;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei",sans-serif}
+  body{display:flex;align-items:center;justify-content:center}
+  #app{position:relative;width:960px;height:640px;transform-origin:center center;
+       border-radius:14px;overflow:hidden;box-shadow:0 0 60px rgba(60,120,255,.25)}
+  canvas{display:block;width:960px;height:640px}
+  .screen{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          background:rgba(4,8,20,.86);backdrop-filter:blur(2px);z-index:5}
+  .hidden{display:none!important}
+  .panel{width:560px;padding:38px 44px;text-align:center;color:#e8f0ff;
+         background:linear-gradient(160deg,rgba(20,32,64,.95),rgba(10,16,36,.95));
+         border:1px solid rgba(110,160,255,.35);border-radius:18px;
+         box-shadow:0 12px 50px rgba(0,0,0,.6)}
+  .panel h1{font-size:52px;letter-spacing:6px;color:#7fd0ff;text-shadow:0 0 22px rgba(80,170,255,.7)}
+  .panel .sub{margin-top:6px;font-size:13px;letter-spacing:3px;color:#7f93c4}
+  .howto{margin:26px auto 8px;max-width:430px;text-align:left;font-size:14px;line-height:1.9;color:#a9bbdf}
+  .howto b{color:#ffd166}
+  .diffRow{display:flex;gap:14px;justify-content:center;margin:26px 0 14px}
+  button{cursor:pointer;font-family:inherit;font-size:16px;font-weight:600;color:#eaf2ff;
+         padding:12px 26px;border-radius:10px;border:1px solid rgba(120,170,255,.5);
+         background:linear-gradient(180deg,#1d3a7a,#12255a);transition:.16s}
+  button:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(70,130,255,.4);border-color:#8fc0ff}
+  .btn-easy{border-color:#4ade80}.btn-normal{border-color:#60a5fa}.btn-hard{border-color:#f87171}
+  .best{margin-top:8px;font-size:14px;color:#ffd166}
+  .stats{margin:22px 0;display:grid;grid-template-columns:1fr 1fr;gap:12px 22px;font-size:15px;color:#bcd0f5}
+  .stats span{color:#fff;font-weight:700}
+  .big{font-size:46px;color:#ffd166;margin:8px 0}
+  .tip{margin-top:18px;font-size:12px;color:#6f82ad}
+  .row-btns{display:flex;gap:12px;justify-content:center;margin-top:12px}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game" width="960" height="640"></canvas>
+
+  <!-- 任务2：开始页 -->
+  <div id="startScreen" class="screen">
+    <div class="panel">
+      <h1>拼音战机</h1>
+      <p class="sub">PINYIN DEFENSE · 打字射击</p>
+      <div class="howto">
+        输入敌机显示的 <b>拼音</b> 即可锁定并发射子弹击落它。<br>
+        输入错误会重置当前输入；放跑敌机会扣生命并断连击。<br>
+        连续击毁可累积 <b>最高 3 倍</b> 得分；<b>空格键</b> 暂停 / 继续；<b>Esc</b> 返回主界面。
+      </div>
+      <div class="diffRow">
+        <button class="btn-easy" data-diff="easy">初级</button>
+        <button class="btn-normal" data-diff="normal">中级</button>
+        <button class="btn-hard" data-diff="hard">高级</button>
+      </div>
+      <p class="best">历史最高分：<span id="bestStart">0</span></p>
+      <p class="tip">点击难度即开始游戏</p>
+    </div>
+  </div>
+
+  <!-- 任务7：暂停页 -->
+  <div id="pauseScreen" class="screen hidden">
+    <div class="panel">
+      <h1 style="font-size:44px">已暂停</h1>
+      <p class="sub">空格 继续 · Esc 返回主界面</p>
+      <div class="row-btns">
+        <button id="resumeBtn">继续</button>
+        <button id="pauseMenuBtn">返回主界面</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 任务2：游戏结束页 -->
+  <div id="overScreen" class="screen hidden">
+    <div class="panel">
+      <h1 style="font-size:44px">游戏结束</h1>
+      <div class="big" id="goScore">0</div>
+      <p class="sub">本局得分</p>
+      <div class="stats">
+        <div>击毁敌机：<span id="goKills">0</span></div>
+        <div>最高连击：<span id="goCombo">0</span></div>
+        <div>正确率：<span id="goAcc">0%</span></div>
+        <div>打字速度：<span id="goSpeed">0</span> 字/分</div>
+        <div>达到等级：<span id="goLevel">1</span></div>
+        <div>历史最高：<span id="goBest">0</span></div>
+      </div>
+      <div class="row-btns">
+        <button id="againBtn">再来一局</button>
+        <button id="menuBtn">返回菜单</button>
+      </div>
+      <p class="tip">按 Enter 快速重开</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ========== 任务2：基础框架 / 画布 / 状态 ========== */
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const SCREEN = { START:0, PLAYING:1, PAUSED:2, OVER:3 };
+  let screen = SCREEN.START;
+
+  const $ = function(id){ return document.getElementById(id); };
+  const startScreen = $('startScreen'), pauseScreen = $('pauseScreen'), overScreen = $('overScreen');
+  function hideAll(){ startScreen.classList.add('hidden'); pauseScreen.classList.add('hidden'); overScreen.classList.add('hidden'); }
+
+  /* ========== 任务3：三套拼音词库（py=拼音, zh=中文, en=英文释义） ========== */
+  const WORDS = {
+    easy: [
+      {py:'ma',zh:'妈',en:'mother'},{py:'ba',zh:'爸',en:'father'},{py:'wo',zh:'我',en:'I'},
+      {py:'ni',zh:'你',en:'you'},{py:'ta',zh:'他',en:'he'},{py:'yi',zh:'一',en:'one'},
+      {py:'er',zh:'二',en:'two'},{py:'san',zh:'三',en:'three'},{py:'si',zh:'四',en:'four'},
+      {py:'wu',zh:'五',en:'five'},{py:'liu',zh:'六',en:'six'},{py:'qi',zh:'七',en:'seven'},
+      {py:'jiu',zh:'九',en:'nine'},{py:'shi',zh:'十',en:'ten'},{py:'hao',zh:'好',en:'good'},
+      {py:'ren',zh:'人',en:'person'},{py:'da',zh:'大',en:'big'},{py:'xiao',zh:'小',en:'small'},
+      {py:'shui',zh:'水',en:'water'},{py:'huo',zh:'火',en:'fire'},{py:'tian',zh:'天',en:'sky'},
+      {py:'di',zh:'地',en:'earth'},{py:'ri',zh:'日',en:'sun'},{py:'yue',zh:'月',en:'moon'},
+      {py:'xing',zh:'星',en:'star'},{py:'feng',zh:'风',en:'wind'},{py:'yu',zh:'雨',en:'rain'},
+      {py:'shu',zh:'树',en:'tree'},{py:'hua',zh:'花',en:'flower'},{py:'bai',zh:'白',en:'white'}
+    ],
+    normal: [
+      {py:'nihao',zh:'你好',en:'hello'},{py:'xuesheng',zh:'学生',en:'student'},
+      {py:'laoshi',zh:'老师',en:'teacher'},{py:'pengyou',zh:'朋友',en:'friend'},
+      {py:'jiaoshi',zh:'教室',en:'classroom'},{py:'tushu',zh:'图书',en:'book'},
+      {py:'dianying',zh:'电影',en:'movie'},{py:'yinyue',zh:'音乐',en:'music'},
+      {py:'tiyu',zh:'体育',en:'sport'},{py:'xuexi',zh:'学习',en:'study'},
+      {py:'gongzuo',zh:'工作',en:'work'},{py:'shenghuo',zh:'生活',en:'life'},
+      {py:'shijie',zh:'世界',en:'world'},{py:'zhongguo',zh:'中国',en:'China'},
+      {py:'chengshi',zh:'城市',en:'city'},{py:'gongyuan',zh:'公园',en:'park'},
+      {py:'shangdian',zh:'商店',en:'shop'},{py:'yiyuan',zh:'医院',en:'hospital'},
+      {py:'xuexiao',zh:'学校',en:'school'},{py:'canjia',zh:'参加',en:'attend'},
+      {py:'zhidao',zh:'知道',en:'know'},{py:'renshi',zh:'认识',en:'recognize'},
+      {py:'xiexie',zh:'谢谢',en:'thanks'},{py:'zaijian',zh:'再见',en:'goodbye'},
+      {py:'zaoshang',zh:'早上',en:'morning'},{py:'wanshang',zh:'晚上',en:'evening'}
+    ],
+    hard: [
+      {py:'wangluo',zh:'网络',en:'network'},{py:'dianzi',zh:'电子',en:'electronic'},
+      {py:'xinxi',zh:'信息',en:'information'},{py:'chengxu',zh:'程序',en:'program'},
+      {py:'shujuku',zh:'数据库',en:'database'},{py:'yunxing',zh:'运行',en:'operate'},
+      {py:'kaifa',zh:'开发',en:'develop'},{py:'sheji',zh:'设计',en:'design'},
+      {py:'chuangxin',zh:'创新',en:'innovation'},{py:'kexue',zh:'科学',en:'science'},
+      {py:'jishu',zh:'技术',en:'technology'},{py:'gongcheng',zh:'工程',en:'engineering'},
+      {py:'huanjing',zh:'环境',en:'environment'},{py:'ziyuan',zh:'资源',en:'resource'},
+      {py:'nengyuan',zh:'能源',en:'energy'},{py:'jiaotong',zh:'交通',en:'transport'},
+      {py:'fazhan',zh:'发展',en:'development'},{py:'jingji',zh:'经济',en:'economy'},
+      {py:'shehui',zh:'社会',en:'society'},{py:'wenhua',zh:'文化',en:'culture'},
+      {py:'chuantong',zh:'传统',en:'tradition'},{py:'xiandai',zh:'现代',en:'modern'},
+      {py:'guanli',zh:'管理',en:'management'},{py:'yanjiu',zh:'研究',en:'research'},
+      {py:'xiangmu',zh:'项目',en:'project'},{py:'guoji',zh:'国际',en:'international'},
+      {py:'maoyi',zh:'贸易',en:'trade'},{py:'shichang',zh:'市场',en:'market'},
+      {py:'zhengce',zh:'政策',en:'policy'},{py:'tongji',zh:'统计',en:'statistics'}
+    ]
+  };
+
+  /* ========== 任务6：难度配置（基础参数） ========== */
+  // 采用「目标在场数」驱动：屏幕上始终维持 alive 架敌机，缺一架补一架。
+  //   alive    = 目标同时在场数（开局依次进场，不瞬间铺满）
+  //   aliveCap = 在场数硬上限（随等级温和增长，绝不失控）
+  //   gap      = 补位间隔(ms)：击毁一架后最多等 gap 毫秒就有新机进画面，不空窗
+  // 不打字时敌机靠自然下落离场，生成速率 ≈ alive/停留时间，天然稳定且有度。
+  // 目标在场数：初级 3 / 中级 4 / 高级 5；硬上限各 +1（4/5/6），随等级温和增长即封顶。
+  const DIFF = {
+    easy:   { label:'初级', alive:3, aliveCap:4, gap:700, fall:0.55, fallStep:0.04, fallMax:0.90, life:5, color:'#4ade80' },
+    normal: { label:'中级', alive:4, aliveCap:5, gap:550, fall:0.80, fallStep:0.06, fallMax:1.30, life:5, color:'#60a5fa' },
+    hard:   { label:'高级', alive:5, aliveCap:6, gap:420, fall:1.05, fallStep:0.08, fallMax:1.75, life:5, color:'#f87171' }
+  };
+  let diffKey = 'easy';
+  const LANES = 6;
+  const MENU_BTN = { x:W-118, y:8, w:96, h:26 };   // 游戏中常驻「返回主界面」按钮（Canvas 坐标）
+
+  /* ========== 游戏状态数据 ========== */
+  let hp, score, combo, maxCombo, level, kills;
+  let enemies, bullets, particles, stars;
+  stars = [];                       // 星空数组需预先初始化，否则首次渲染即报错
+  let currentInput, target;
+  let lastSpawn, lastTime, spawnIndex;
+  let stats;                       // 任务10：打字统计
+  let missFlash = 0, levelFlash = 0;
+  let best = 0;
+  try { best = parseInt(localStorage.getItem('pinyinDefenseBest')||'0',10) || 0; } catch(e){}
+  $('bestStart').textContent = best;
+
+  /* ========== 任务10：Web Audio 音效（无外部文件） ========== */
+  let audioCtx = null;
+  function ac(){
+    if(!audioCtx){ try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function beep(freq, dur, type, vol, slide){
+    const c = ac(); if(!c) return;
+    const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), t + dur);
+    g.gain.setValueAtTime(vol || 0.05, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur);
+  }
+  function sound(kind){
+    switch(kind){
+      case 'key':   beep(620, 0.04, 'sine', 0.025); break;
+      case 'shoot': beep(880, 0.07, 'square', 0.025, 1500); break;
+      case 'hit':   beep(220, 0.22, 'sawtooth', 0.05, 60); break;
+      case 'error': beep(170, 0.11, 'square', 0.035, 110); break;
+      case 'miss':  beep(300, 0.28, 'triangle', 0.05, 80); break;
+      case 'over':  beep(420, 0.6, 'sawtooth', 0.05, 60); break;
+    }
+  }
+
+  /* ========== 任务7：星空背景 ========== */
+  for(let i=0;i<110;i++){
+    stars.push({ x:Math.random()*W, y:Math.random()*H, r:Math.random()*1.6+0.3,
+                 speed:Math.random()*0.05+0.01, a:Math.random()*0.7+0.2 });
+  }
+
+  /* ========== 任务6：随分数成长的难度参数（目标在场数受控） ========== */
+  // 目标在场数随等级温和增长，aliveCap 硬性封顶；补位间隔 gap 随等级略缩短（更快补位）。
+  function targetAlive(){ const d=DIFF[diffKey]; return Math.min(d.aliveCap, d.alive + Math.floor((level-1)/6)); }
+  function curGap(){ const d=DIFF[diffKey]; return Math.max(280, d.gap - (level-1)*18); }
+  function curFall(){ const d=DIFF[diffKey]; return Math.min(d.fallMax, d.fall + (level-1)*d.fallStep); }
+  function multiplier(){ return combo >= 6 ? 3 : combo >= 3 ? 2 : 1; }
+
+  /* ========== 任务3：敌机生成（泳道防重叠） ========== */
+  function pickLanes(n){
+    // 到点必生成：不再因「泳道顶部敌机未降够」而跳过。按泳道最上方敌机的 y 排序，越空越优先。
+    const ranked = [];
+    for(let i=0;i<LANES;i++){
+      let top = Infinity;
+      for(const e of enemies){ if(!e.dead && e.lane === i && e.y < top) top = e.y; }
+      ranked.push({ lane:i, top:top });
+    }
+    ranked.sort(function(a,b){ return b.top - a.top; });          // top 越大越空，排前面
+    return ranked.slice(0, Math.max(1, n)).map(function(o){ return o.lane; });
+  }
+  function spawnWave(){
+    const pool = WORDS[diffKey];
+    const lanes = pickLanes(1);   // 每次补 1 架：数量严格由"目标在场数"控制，避免倍数叠加
+    for(const lane of lanes){
+      let entry = pool[spawnIndex % pool.length];
+      spawnIndex += 1 + Math.floor(Math.random()*3);
+      // 新机从画面顶边外一点(y=-44)飞入，随即进入视野；选的是"最空泳道"，
+      // 若该泳道顶部已有敌机未落走，则排在它上方 100px 避免重叠。
+      let top = -44;
+      for(const e of enemies){ if(!e.dead && e.lane === lane && e.y < top) top = e.y; }
+      const spawnY = top <= -44 ? -44 : Math.min(-44, top - 100);
+      enemies.push({
+        word: entry, text: entry.py,
+        x: (lane+0.5)*(W/LANES), y:spawnY, lane:lane,
+        speed: curFall()*(0.9+Math.random()*0.25),
+        typed:0, locked:false, dying:false, dead:false, flash:0,
+        wobble: Math.random()*Math.PI*2, color: DIFF[diffKey].color
+      });
+    }
+  }
+
+  /* ========== 任务5：子弹 / 爆炸粒子 ========== */
+  function fireBullet(e){ bullets.push({ x:W/2, y:H-84, target:e, speed:13, dead:false }); sound('shoot'); }
+  function createExplosion(x,y,color){
+    const palette=[color,'#ffe66d','#ff6b6b','#ffffff'];
+    for(let i=0;i<30;i++){
+      const a=Math.random()*Math.PI*2, sp=1+Math.random()*5.5;
+      particles.push({ x:x, y:y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        life:1, decay:0.015+Math.random()*0.02, size:2+Math.random()*4,
+        color:palette[Math.floor(Math.random()*palette.length)] });
+    }
+  }
+
+  /* ========== 任务4：击毁结算 / 输入处理 ========== */
+  function destroyEnemy(e){
+    if(e.dead) return;
+    e.dead = true; kills++;
+    if(target === e){ target = null; currentInput = ''; }
+    combo++; maxCombo = Math.max(maxCombo, combo);
+    score += 100 * multiplier();
+    createExplosion(e.x, e.y, e.color);
+    sound('hit');
+    levelFlash = 1.0;
+    const nl = 1 + Math.floor(score/400);
+    if(nl > level) level = nl;
+  }
+  function completeMatch(){
+    if(!target) return;
+    target.dying = true; target.locked = true;
+    fireBullet(target);
+    // 立即释放输入锁，玩家可马上开始匹配下一架；击毁结算在子弹命中时进行
+    target = null; currentInput = '';
+  }
+  function wrongInput(){
+    currentInput = '';
+    if(target){ target.typed = 0; target.locked = false; target = null; }
+    combo = 0; sound('error');
+  }
+  function handleChar(ch){
+    stats.typed++;
+    if(!target){
+      let pick = null;
+      for(const e of enemies){
+        if(e.dead || e.dying || e.typed > 0) continue;
+        if(e.text.charAt(0) === ch && (!pick || e.y > pick.y)) pick = e; // 优先最紧急(最靠下)
+      }
+      if(pick){
+        target = pick; pick.locked = true; currentInput = ch; pick.typed = 1;
+        stats.correct++; sound('key');
+        if(currentInput.length === pick.text.length) completeMatch();
+      } else wrongInput();
+    } else {
+      const expected = target.text.charAt(currentInput.length);
+      if(expected === ch){
+        currentInput += ch; target.typed = currentInput.length;
+        stats.correct++; sound('key');
+        if(currentInput.length === target.text.length) completeMatch();
+      } else wrongInput();
+    }
+  }
+
+  /* ========== 流程控制 ========== */
+  function startGame(key){
+    diffKey = key;
+    hp = DIFF[key].life; score = 0; combo = 0; maxCombo = 0; level = 1; kills = 0;
+    enemies = []; bullets = []; particles = [];
+    currentInput = ''; target = null;
+    stats = { typed:0, correct:0, start:performance.now(), end:0 };
+    missFlash = 0; levelFlash = 0;
+    spawnIndex = Math.floor(Math.random()*WORDS[diffKey].length);
+    lastSpawn = performance.now() - 99999; lastTime = 0;
+    hideAll(); screen = SCREEN.PLAYING; ac();
+    // 开局只放 1 架，其余交给 update 按 gap 依次补位——敌机一架接一架飞入，
+    // 不瞬间铺满；击毁/漏过后同样按 gap 快速补位，屏幕始终有敌机可打。
+    spawnWave();
+  }
+  function pause(){ screen = SCREEN.PAUSED; pauseScreen.classList.remove('hidden'); }
+  function resume(){ screen = SCREEN.PLAYING; pauseScreen.classList.add('hidden'); lastTime = 0; }
+  function toMenu(){
+    screen = SCREEN.START; hideAll(); startScreen.classList.remove('hidden');
+    $('bestStart').textContent = best;
+  }
+  function gameOver(){
+    screen = SCREEN.OVER;
+    stats.end = performance.now();
+    if(score > best){ best = score; try{ localStorage.setItem('pinyinDefenseBest', String(best)); }catch(e){} }
+    const sec = Math.max((stats.end - stats.start)/1000, 1);
+    const acc = stats.typed ? Math.round(stats.correct/stats.typed*100) : 100;
+    const cpm = Math.round(stats.correct/sec*60);
+    $('goScore').textContent = score;
+    $('goKills').textContent = kills;
+    $('goCombo').textContent = maxCombo;
+    $('goAcc').textContent = acc + '%';
+    $('goSpeed').textContent = cpm;
+    $('goLevel').textContent = level;
+    $('goBest').textContent = best;
+    overScreen.classList.remove('hidden');
+    sound('over');
+  }
+
+  /* ========== 任务2/5/6/7：每帧更新 ========== */
+  function update(dt){
+    const f = Math.min(dt,50)/16.67;
+    // 星空始终流动
+    for(const s of stars){ s.y += s.speed*f*3; if(s.y > H){ s.y = -2; s.x = Math.random()*W; } }
+    if(missFlash > 0) missFlash -= f*0.05;
+    if(levelFlash > 0) levelFlash -= f*0.02;
+    if(screen !== SCREEN.PLAYING) return;
+
+    const now = performance.now();
+    // 目标在场数驱动：存活敌机不足则每隔 curGap 补一架，直到补满 targetAlive。
+    // 这样开局依次进场（不瞬间铺满），击毁/漏过后最多 curGap 毫秒即有新机补上（不空窗）。
+    let aliveCount = 0;
+    for(const e of enemies){ if(!e.dead) aliveCount++; }
+    if(aliveCount < targetAlive() && now - lastSpawn >= curGap()){ spawnWave(); lastSpawn = now; }
+
+    for(const e of enemies){
+      if(e.dead) continue;          // 所有存活敌机（含已匹配等待子弹的 dying）都持续下降，输入不再冻结敌机
+      e.wobble += 0.03*f;
+      e.y += e.speed*f;
+      if(e.y > H + 40){
+        e.dead = true;
+        if(target === e){ target = null; currentInput = ''; }
+        if(e.dying){
+          // 已成功匹配、只是子弹尚未命中的敌机漏出画面：视为击毁，不扣血（子弹随后判空自动消失）
+          combo++; maxCombo = Math.max(maxCombo, combo);
+          score += 100 * multiplier();
+          const nl = 1 + Math.floor(score/400); if(nl > level) level = nl;
+        } else {
+          hp--; combo = 0; missFlash = 1; sound('miss');
+          if(hp <= 0){ gameOver(); break; }
+        }
+      }
+    }
+
+    for(const b of bullets){
+      if(b.dead) continue;
+      const t = b.target;
+      if(!t || t.dead){ b.dead = true; continue; }
+      const dx = t.x - b.x, dy = t.y - b.y, d = Math.hypot(dx,dy) || 1;
+      if(d < b.speed + 8){ destroyEnemy(t); b.dead = true; }
+      else { b.x += dx/d*b.speed*f; b.y += dy/d*b.speed*f; }
+    }
+
+    for(const p of particles){
+      p.x += p.vx*f; p.y += p.vy*f; p.vx *= 0.98; p.vy *= 0.98; p.life -= p.decay*f;
+    }
+    enemies = enemies.filter(function(e){ return !e.dead; });
+    bullets  = bullets.filter(function(b){ return !b.dead; });
+    particles = particles.filter(function(p){ return p.life > 0; });
+  }
+
+  /* ========== 任务5/7：绘制 ========== */
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  function drawStars(){
+    for(const s of stars){ ctx.globalAlpha = s.a; ctx.fillStyle = '#cfe0ff';
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+  function drawEnemies(){
+    ctx.font = 'bold 18px Consolas, monospace';
+    ctx.textBaseline = 'middle';
+    for(const e of enemies){
+      ctx.save();
+      ctx.translate(e.x, e.y + Math.sin(e.wobble)*2);
+      // 机身
+      ctx.fillStyle = e.dying ? '#ff9f43' : e.color;
+      ctx.strokeStyle = e.locked ? '#ffffff' : 'rgba(255,255,255,.25)';
+      ctx.lineWidth = e.locked ? 2 : 1;
+      ctx.shadowColor = e.color; ctx.shadowBlur = e.locked ? 18 : 8;
+      ctx.beginPath();
+      ctx.moveTo(0,18); ctx.lineTo(-22,-6); ctx.lineTo(-10,-2);
+      ctx.lineTo(0,-18); ctx.lineTo(10,-2); ctx.lineTo(22,-6); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#0a1224';
+      ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      // 拼音标签（已输入绿色 / 未输入白色）
+      const labelY = e.y + 38;
+      const typed = e.text.slice(0, e.typed), rest = e.text.slice(e.typed);
+      const fullW = ctx.measureText(e.text).width;
+      const boxW = Math.max(fullW + 22, 56);
+      roundRect(e.x - boxW/2, labelY - 14, boxW, 28, 8);
+      ctx.fillStyle = 'rgba(6,12,28,.88)'; ctx.fill();
+      ctx.strokeStyle = e.locked ? '#6cff9e' : 'rgba(120,160,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
+      const sx = e.x - fullW/2;
+      ctx.fillStyle = '#6cff9e'; ctx.fillText(typed, sx, labelY);
+      ctx.fillStyle = '#ffffff'; ctx.fillText(rest, sx + ctx.measureText(typed).width, labelY);
+      // 中文 / 英文释义
+      ctx.font = '11px Consolas, monospace'; ctx.fillStyle = '#8ea4cc'; ctx.textAlign = 'center';
+      ctx.fillText(e.word.zh + ' · ' + e.word.en, e.x, labelY + 26);
+      ctx.textAlign = 'left'; ctx.font = 'bold 18px Consolas, monospace';
+    }
+  }
+  function drawBullets(){
+    for(const b of bullets){
+      ctx.save();
+      ctx.shadowColor = '#ffd166'; ctx.shadowBlur = 14;
+      ctx.fillStyle = '#fff4c2';
+      ctx.beginPath(); ctx.arc(b.x,b.y,5,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+  function drawParticles(){
+    for(const p of particles){
+      ctx.globalAlpha = Math.max(p.life,0); ctx.fillStyle = p.color;
+      ctx.fillRect(p.x-p.size/2, p.y-p.size/2, p.size, p.size);
+    }
+    ctx.globalAlpha = 1;
+  }
+  function drawPlayer(){
+    const x = W/2, y = H-64;
+    ctx.save();
+    ctx.shadowColor = '#59b4ff'; ctx.shadowBlur = 18;
+    ctx.fillStyle = '#8fd0ff';
+    ctx.beginPath();
+    ctx.moveTo(x,y-22); ctx.lineTo(x-26,y+16); ctx.lineTo(x-9,y+9);
+    ctx.lineTo(x,y+20); ctx.lineTo(x+9,y+9); ctx.lineTo(x+26,y+16); ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffd166';
+    ctx.fillRect(x-4,y+6,8,14);
+    ctx.restore();
+  }
+  function drawHUD(){
+    ctx.textBaseline = 'top';
+    // 分数 / 等级
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px Consolas, monospace';
+    ctx.fillText('SCORE  ' + score, 22, 18);
+    ctx.font = '13px Consolas, monospace'; ctx.fillStyle = '#8ea4cc';
+    ctx.fillText(DIFF[diffKey].label + '  ·  LV.' + level, 22, 46);
+    // 生命条
+    ctx.fillStyle = '#cbd6ee'; ctx.font = '13px Consolas, monospace';
+    ctx.fillText('LIFE', W-300, 20);
+    for(let i=0;i<DIFF[diffKey].life;i++){
+      roundRect(W-254+i*26, 20, 20, 14, 4);
+      ctx.fillStyle = i < hp ? '#ff6b6b' : 'rgba(255,255,255,.15)'; ctx.fill();
+    }
+    // 返回主界面按钮（可点击）
+    roundRect(MENU_BTN.x, MENU_BTN.y, MENU_BTN.w, MENU_BTN.h, 6);
+    ctx.fillStyle = 'rgba(90,110,160,.28)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(150,180,235,.5)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#cbd6ee'; ctx.font = '12px Consolas, monospace'; ctx.textAlign = 'center';
+    ctx.fillText('主界面', MENU_BTN.x + MENU_BTN.w/2, MENU_BTN.y + 7);
+    ctx.textAlign = 'left';
+    // 连击 / 倍率
+    if(combo > 0){
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd166'; ctx.font = 'bold 26px Consolas, monospace';
+      ctx.fillText('COMBO ×' + combo, W/2, 18);
+      ctx.font = 'bold 16px Consolas, monospace';
+      ctx.fillText('得分倍率 ×' + multiplier(), W/2, 50);
+      ctx.textAlign = 'left';
+    }
+    // 当前输入（飞船上方）
+    ctx.textAlign = 'center'; ctx.font = 'bold 30px Consolas, monospace'; ctx.textBaseline = 'middle';
+    const caret = (Math.floor(performance.now()/400)%2) ? '_' : ' ';
+    if(currentInput){ ctx.fillStyle = '#6cff9e'; ctx.fillText(currentInput + caret, W/2, H-108); }
+    else { ctx.fillStyle = 'rgba(160,185,230,.35)'; ctx.font = '16px Consolas, monospace';
+           ctx.fillText('输入敌机拼音开始锁定…', W/2, H-108); }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // 提示闪烁
+    if(levelFlash > 0){ ctx.globalAlpha = Math.min(levelFlash,1); ctx.textAlign='center';
+      ctx.fillStyle='#ffd166'; ctx.font='bold 24px Consolas, monospace';
+      ctx.fillText('LEVEL UP · LV.'+level, W/2, H/2-40); ctx.textAlign='left'; ctx.globalAlpha=1; }
+  }
+  function draw(){
+    ctx.fillStyle = '#070b1a'; ctx.fillRect(0,0,W,H);
+    drawStars();
+    if(screen !== SCREEN.START){ drawEnemies(); drawBullets(); drawParticles(); drawPlayer(); drawHUD(); }
+    if(missFlash > 0){ ctx.fillStyle = 'rgba(255,60,60,'+(missFlash*0.22)+')'; ctx.fillRect(0,0,W,H); }
+  }
+
+  /* ========== 任务2：主循环 requestAnimationFrame ========== */
+  function loop(ts){
+    requestAnimationFrame(loop);
+    if(!lastTime){ lastTime = ts; }
+    const dt = ts - lastTime; lastTime = ts;
+    update(dt > 200 ? 16 : dt);   // 防止切标签页后大跳变（任务8）
+    draw();
+  }
+  requestAnimationFrame(loop);
+
+  /* ========== 事件绑定 ========== */
+  document.querySelectorAll('[data-diff]').forEach(function(btn){
+    btn.addEventListener('click', function(){ startGame(btn.getAttribute('data-diff')); });
+  });
+  $('resumeBtn').addEventListener('click', resume);
+  $('pauseMenuBtn').addEventListener('click', toMenu);
+  $('againBtn').addEventListener('click', function(){ startGame(diffKey); });
+  $('menuBtn').addEventListener('click', toMenu);
+  // 点击 Canvas 上的「主界面」按钮（考虑页面缩放）
+  canvas.addEventListener('click', function(ev){
+    if(screen !== SCREEN.PLAYING && screen !== SCREEN.PAUSED) return;
+    const r = canvas.getBoundingClientRect();
+    const x = (ev.clientX - r.left) * (W / r.width);
+    const y = (ev.clientY - r.top)  * (H / r.height);
+    if(x >= MENU_BTN.x && x <= MENU_BTN.x+MENU_BTN.w && y >= MENU_BTN.y && y <= MENU_BTN.y+MENU_BTN.h){
+      toMenu();
+    }
+  });
+
+  window.addEventListener('keydown', function(e){
+    if(e.code === 'Escape'){
+      if(screen === SCREEN.PLAYING || screen === SCREEN.PAUSED){ e.preventDefault(); toMenu(); }
+      return;
+    }
+    if(e.code === 'Space'){
+      if(screen === SCREEN.PLAYING){ e.preventDefault(); pause(); }
+      else if(screen === SCREEN.PAUSED){ e.preventDefault(); resume(); }
+      return;
+    }
+    if(screen === SCREEN.PLAYING){
+      if(e.key.length === 1 && /[a-zA-Z]/.test(e.key)) handleChar(e.key.toLowerCase());
+    } else if(screen === SCREEN.OVER){
+      if(e.code === 'Enter') startGame(diffKey);
+    }
+  });
+
+  // 自适应缩放，保证双击打开时完整可见
+  function fit(){
+    const s = Math.min(1, (window.innerWidth-20)/W, (window.innerHeight-20)/H);
+    $('app').style.transform = 'scale('+s+')';
+  }
+  window.addEventListener('resize', fit); fit();
+})();
+</script>
+</body>
+</html>
