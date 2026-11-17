@@ -11,10 +11,25 @@
 - **丰富反馈**：爆炸粒子、流动星空、Web Audio 合成音效（无外部音频文件）
 - **本局统计**：打字总数、正确率、打字速度、最高分（localStorage 本地保存）
 - **便捷操作**：空格暂停 / 继续，Esc 或点击按钮返回主界面
+- **账号体系**：注册 / 登录 / 游客模式，密码 bcrypt 加密存储于 MySQL；用户名支持中文（3–32 个字符）
+- **在线排行榜**：结算自动上报成绩，全局 Top10 按得分排序展示
 
 ## 运行方式
 
-直接用浏览器打开 `拼音战机.html`（或仓库首页的 `index.html`）即可开始游戏，不需要安装任何依赖，也不联网。
+**单机试玩**：直接用浏览器打开 `拼音战机.html`（或仓库首页的 `index.html`）即可开始游戏，
+点「游客模式直接试玩」跳过登录，不需要任何依赖，也不联网。
+
+**带账号与排行榜**：需要先启动后端（MySQL 8.0 + FastAPI），三步：
+
+```bash
+mysql -uroot -p < sql/init_db.sql                 # 1. 建库建表
+cd backend && pip install -r requirements.txt     # 2. 装依赖
+cd backend && python -m uvicorn main:app --port 8000   # 3. 启动后端
+```
+
+然后双击 `拼音战机.html`，即可注册账号、保存成绩、查看排行榜。
+完整步骤见 [docs/02-后端部署与联调文档.md](docs/02-后端部署与联调文档.md)，
+遇到问题查 [docs/03-故障排查手册.md](docs/03-故障排查手册.md)。
 
 ## 操作说明
 
@@ -47,10 +62,24 @@
 .
 ├── 拼音战机.html          # 游戏完整源码（交付主文件）
 ├── index.html             # Pages 预览入口页（iframe 加载游戏源码）
+├── backend/               # FastAPI 后端：config / db / security / main
+├── sql/init_db.sql        # 建库建表 + 外键（一次执行）
 ├── README.md              # 本文件：使用说明
 └── docs/
-    └── DEVELOPMENT.md     # 完整开发过程记录
+    ├── DEVELOPMENT.md                  # 完整开发过程记录
+    ├── 01-MySQL8-Windows10安装指南.md   # MySQL 安装
+    ├── 02-后端部署与联调文档.md          # 部署 + 接口文档 + 验收清单
+    └── 03-故障排查手册.md                # 常见故障现象→原因→处理
 ```
+
+## 技术栈
+
+| 层 | 技术 |
+|---|---|
+| 前端 | HTML5 Canvas 2D、原生 JavaScript（单文件内联） |
+| 后端 | Python 3.10+、FastAPI、uvicorn、pymysql |
+| 数据库 | MySQL 8.0（utf8mb4） |
+| 密码安全 | passlib + bcrypt（`$2b$12$` 摘要，绝不存明文） |
 
 ## 开发过程
 
@@ -60,5 +89,5 @@
 
 - 拼音朗读（Web Speech API）、中文输入模式
 - 道具系统（清屏 / 护盾 / 减速）、Boss 波次
-- 在线排行榜、主题皮肤与背景音乐
-- 移动端触屏键盘适配
+- 登录态升级为 JWT / Session，防止伪造 user_id 刷分
+- 主题皮肤与背景音乐、移动端触屏键盘适配

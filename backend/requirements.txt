@@ -1,0 +1,7 @@
+# 拼音战机后端依赖（Python 3.10+）
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pymysql>=1.1.0
+passlib>=1.7.4
+bcrypt==4.0.1        # 注意：bcrypt 5.x 与 passlib 1.7.4 不兼容，务必锁定 4.0.1
+python-dotenv>=1.0

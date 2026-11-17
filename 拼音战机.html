@@ -34,14 +34,81 @@
   .big{font-size:46px;color:#ffd166;margin:8px 0}
   .tip{margin-top:18px;font-size:12px;color:#6f82ad}
   .row-btns{display:flex;gap:12px;justify-content:center;margin-top:12px}
+  /* ===== 阶段3：登录 / 注册界面（沿用游戏整体风格） ===== */
+  .auth-logo{font-size:50px;letter-spacing:8px;color:#7fd0ff;text-shadow:0 0 22px rgba(80,170,255,.7)}
+  .auth-sub{margin-top:6px;font-size:12px;letter-spacing:4px;color:#7f93c4}
+  .tabs{display:flex;margin:24px 0 20px;border-bottom:1px solid rgba(120,160,255,.25)}
+  .tab{flex:1;padding:11px 0;cursor:pointer;font-size:16px;font-weight:600;color:#7f93c4;
+       background:none;border:none;border-bottom:2px solid transparent;transition:.16s}
+  .tab.active{color:#7fd0ff;border-bottom-color:#7fd0ff}
+  .field{margin-bottom:14px;text-align:left}
+  .field label{display:block;margin-bottom:6px;font-size:13px;color:#a9bbdf}
+  .field input{width:100%;padding:11px 14px;font-family:inherit;font-size:15px;color:#eaf2ff;
+       background:rgba(6,12,28,.75);border:1px solid rgba(120,160,255,.35);border-radius:9px;
+       outline:none;transition:.16s}
+  .field input:focus{border-color:#7fd0ff;box-shadow:0 0 0 3px rgba(80,170,255,.15)}
+  .field input::placeholder{color:#5a6d96}
+  .auth-msg{min-height:20px;margin:6px 0 2px;font-size:13px;color:#ff8a8a}
+  .auth-msg.ok{color:#6cff9e}
+  .auth-submit{width:100%;padding:13px 0;font-size:17px}
+  .guest{margin-top:14px;font-size:13px;color:#7f93c4}
+  .guest a{color:#8fc0ff;cursor:pointer;text-decoration:underline}
+  .user-chip{display:inline-block;margin-left:10px;padding:3px 10px;font-size:12px;color:#6cff9e;
+       background:rgba(108,255,158,.1);border:1px solid rgba(108,255,158,.35);border-radius:20px}
+  /* ===== 阶段5：成绩上报状态 + 排行榜 ===== */
+  .upload{min-height:16px;margin-top:12px;font-size:12px;color:#6f82ad}
+  .upload.ok{color:#6cff9e}
+  .upload.err{color:#ff8a8a}
+  .rank-list{margin:18px 0 4px;max-height:300px;overflow-y:auto;text-align:left;
+       font-size:14px;color:#bcd0f5}
+  .rank-row{display:grid;grid-template-columns:46px 1fr 82px 74px;gap:8px;align-items:center;
+       padding:9px 10px;border-bottom:1px solid rgba(120,160,255,.12)}
+  .rank-row.head{font-size:12px;letter-spacing:1px;color:#7f93c4;
+       border-bottom-color:rgba(120,160,255,.3)}
+  .rank-row .no{font-weight:700;color:#7fd0ff}
+  .rank-row.top3 .no{color:#ffd166}
+  .rank-row .sc{text-align:right;font-weight:700;color:#ffd166}
+  .rank-row .ac{text-align:right;color:#8fb6ff}
+  .rank-empty{padding:28px 0;text-align:center;font-size:13px;color:#6f82ad}
+  .rank-list::-webkit-scrollbar{width:6px}
+  .rank-list::-webkit-scrollbar-thumb{background:rgba(120,160,255,.35);border-radius:3px}
 </style>
 </head>
 <body>
 <div id="app">
   <canvas id="game" width="960" height="640"></canvas>
 
+  <!-- 阶段3：登录 / 注册页（启动首屏） -->
+  <div id="authScreen" class="screen">
+    <div class="panel" style="width:430px;padding:32px 40px">
+      <div class="auth-logo">拼音战机</div>
+      <p class="auth-sub">PINYIN DEFENSE · 账号中心</p>
+      <div class="tabs">
+        <div id="tabLogin" class="tab active">登录</div>
+        <div id="tabReg" class="tab">注册</div>
+      </div>
+      <!-- 登录表单 -->
+      <form id="loginForm" autocomplete="off">
+        <div class="field"><label>用户名</label><input id="loginUser" type="text" maxlength="32" placeholder="请输入用户名"></div>
+        <div class="field"><label>密码</label><input id="loginPass" type="password" placeholder="请输入密码"></div>
+        <div id="loginMsg" class="auth-msg"></div>
+        <button type="submit" class="auth-submit">登录并进入游戏</button>
+      </form>
+      <!-- 注册表单 -->
+      <form id="regForm" class="hidden" autocomplete="off">
+        <div class="field"><label>用户名</label><input id="regUser" type="text" maxlength="32" placeholder="3-32 位，支持中文/字母/数字/下划线"></div>
+        <div class="field"><label>密码</label><input id="regPass" type="password" maxlength="64" placeholder="至少 6 位"></div>
+        <div class="field"><label>确认密码</label><input id="regPass2" type="password" maxlength="64" placeholder="再次输入密码"></div>
+        <div id="regMsg" class="auth-msg"></div>
+        <button type="submit" class="auth-submit">注册并进入游戏</button>
+      </form>
+      <p class="guest">不想注册？<a id="guestLink">游客模式直接试玩 →</a></p>
+      <p class="tip" id="authTip">账号数据存于 MySQL · 密码加密存储</p>
+    </div>
+  </div>
+
   <!-- 任务2：开始页 -->
-  <div id="startScreen" class="screen">
+  <div id="startScreen" class="screen hidden">
     <div class="panel">
       <h1>拼音战机</h1>
       <p class="sub">PINYIN DEFENSE · 打字射击</p>
@@ -56,7 +123,11 @@
         <button class="btn-hard" data-diff="hard">高级</button>
       </div>
       <p class="best">历史最高分：<span id="bestStart">0</span></p>
-      <p class="tip">点击难度即开始游戏</p>
+      <p class="tip" id="loginUserTip">点击难度即开始游戏</p>
+      <div class="row-btns" style="margin-top:8px">
+        <button id="rankBtn" style="font-size:13px;padding:8px 18px">排行榜</button>
+        <button id="logoutBtn" style="font-size:13px;padding:8px 18px">退出登录</button>
+      </div>
     </div>
   </div>
 
@@ -86,11 +157,26 @@
         <div>达到等级：<span id="goLevel">1</span></div>
         <div>历史最高：<span id="goBest">0</span></div>
       </div>
+      <p class="upload" id="goUpload"></p>
       <div class="row-btns">
         <button id="againBtn">再来一局</button>
         <button id="menuBtn">返回菜单</button>
+        <button id="overRankBtn" style="font-size:13px;padding:8px 18px">排行榜</button>
       </div>
       <p class="tip">按 Enter 快速重开</p>
+    </div>
+  </div>
+
+  <!-- 阶段5：排行榜（读取 /get_rank 全局 Top10） -->
+  <div id="rankScreen" class="screen hidden">
+    <div class="panel" style="width:620px">
+      <h1 style="font-size:40px">排 行 榜</h1>
+      <p class="sub">TOP 10 · 按最高分降序</p>
+      <div class="rank-list" id="rankList"></div>
+      <div class="row-btns" style="margin-top:18px">
+        <button id="rankRefresh" style="font-size:13px;padding:8px 18px">刷新</button>
+        <button id="rankBack">返回</button>
+      </div>
     </div>
   </div>
 </div>
@@ -103,12 +189,12 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
-  const SCREEN = { START:0, PLAYING:1, PAUSED:2, OVER:3 };
-  let screen = SCREEN.START;
+  const SCREEN = { AUTH:4, START:0, PLAYING:1, PAUSED:2, OVER:3 };
+  let screen = SCREEN.AUTH;   // 阶段3：启动首屏改为登录/注册页
 
   const $ = function(id){ return document.getElementById(id); };
-  const startScreen = $('startScreen'), pauseScreen = $('pauseScreen'), overScreen = $('overScreen');
-  function hideAll(){ startScreen.classList.add('hidden'); pauseScreen.classList.add('hidden'); overScreen.classList.add('hidden'); }
+  const authScreen = $('authScreen'), startScreen = $('startScreen'), pauseScreen = $('pauseScreen'), overScreen = $('overScreen'), rankScreen = $('rankScreen');
+  function hideAll(){ authScreen.classList.add('hidden'); startScreen.classList.add('hidden'); pauseScreen.classList.add('hidden'); overScreen.classList.add('hidden'); rankScreen.classList.add('hidden'); }
 
   /* ========== 任务3：三套拼音词库（py=拼音, zh=中文, en=英文释义） ========== */
   const WORDS = {
@@ -173,6 +259,11 @@
   let diffKey = 'easy';
   const LANES = 6;
   const MENU_BTN = { x:W-118, y:8, w:96, h:26 };   // 游戏中常驻「返回主界面」按钮（Canvas 坐标）
+
+  /* ========== 阶段3/4/5：账号与后端配置 ========== */
+  // 后端接口根地址。迁移到云服务器时，只需把这里改成 https://你的域名 即可。
+  const API_BASE = 'http://127.0.0.1:8000';
+  let currentUser = null;   // 当前登录用户 {user_id, username}；游客模式为 null
 
   /* ========== 游戏状态数据 ========== */
   let hp, score, combo, maxCombo, level, kills;
@@ -321,6 +412,151 @@
     }
   }
 
+  /* ========== 阶段3：登录 / 注册交互 ========== */
+  let authMode = 'login';   // 当前表单：login | reg
+  function switchAuth(mode){
+    authMode = mode;
+    const isReg = mode === 'reg';
+    $('tabLogin').classList.toggle('active', !isReg);
+    $('tabReg').classList.toggle('active', isReg);
+    $('loginForm').classList.toggle('hidden', isReg);
+    $('regForm').classList.toggle('hidden', !isReg);
+    $('loginMsg').textContent = ''; $('regMsg').textContent = '';
+  }
+  function authMsg(id, text, ok){
+    const el = $(id); el.textContent = text; el.className = 'auth-msg' + (ok ? ' ok' : '');
+  }
+  // 统一的后端请求封装（含网络异常兜底）
+  async function apiPost(path, body){
+    const res = await fetch(API_BASE + path, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body || {})
+    });
+    let data;
+    try { data = await res.json(); } catch(e){ data = {}; }
+    // FastAPI 参数校验失败会返回 422 + {detail:[...]}，这里转成可读提示，
+    // 避免前端只显示笼统的"注册失败/登录失败"
+    if(!res.ok && data && data.detail && !data.msg){
+      const d = Array.isArray(data.detail) ? data.detail[0] : data.detail;
+      data = { ok:false, msg:(d && d.msg) ? String(d.msg) : ('请求失败（HTTP ' + res.status + '）') };
+    }
+    return data;
+  }
+  function enterGameFromAuth(user){
+    currentUser = user;
+    hideAll(); screen = SCREEN.START; startScreen.classList.remove('hidden');
+    // 更新开始页的登录态提示
+    $('loginUserTip').textContent = user
+      ? ('欢迎，' + user.username + ' · 点击难度开始游戏')
+      : '游客模式 · 点击难度开始游戏';
+    $('logoutBtn').style.display = user ? '' : 'none';
+    $('bestStart').textContent = best;
+  }
+  async function doRegister(ev){
+    ev.preventDefault();
+    const u = $('regUser').value.trim(), p = $('regPass').value, p2 = $('regPass2').value;
+    if(!u){ return authMsg('regMsg','用户名不能为空',false); }
+    if(u.length < 3 || u.length > 32){ return authMsg('regMsg','用户名长度需为 3-32 位',false); }
+    // 允许中文、字母、数字、下划线；汉字在 JS 中长度为 1，与"总长度 3-32 位"规则一致
+    if(!/^[A-Za-z0-9_\u3400-\u4DBF\u4E00-\u9FFF]+$/.test(u)){
+      return authMsg('regMsg','用户名只能包含中文、字母、数字、下划线',false);
+    }
+    if(!p){ return authMsg('regMsg','密码不能为空',false); }
+    if(p.length < 6){ return authMsg('regMsg','密码长度至少 6 位',false); }
+    if(p !== p2){ return authMsg('regMsg','两次输入的密码不一致',false); }
+    authMsg('regMsg','正在注册…',true);
+    try{
+      const data = await apiPost('/register', {username:u, password:p});
+      if(data.ok){ authMsg('regMsg','注册成功，进入游戏…',true); enterGameFromAuth(data.user); }
+      else authMsg('regMsg', data.msg || '注册失败',false);
+    }catch(e){ authMsg('regMsg','无法连接后端服务，请确认 FastAPI 已启动',false); }
+  }
+  async function doLogin(ev){
+    ev.preventDefault();
+    const u = $('loginUser').value.trim(), p = $('loginPass').value;
+    if(!u){ return authMsg('loginMsg','用户名不能为空',false); }
+    if(!p){ return authMsg('loginMsg','密码不能为空',false); }
+    authMsg('loginMsg','正在登录…',true);
+    try{
+      const data = await apiPost('/login', {username:u, password:p});
+      if(data.ok){ authMsg('loginMsg','登录成功，进入游戏…',true); enterGameFromAuth(data.user); }
+      else authMsg('loginMsg', data.msg || '登录失败',false);
+    }catch(e){ authMsg('loginMsg','无法连接后端服务，请确认 FastAPI 已启动',false); }
+  }
+  function doLogout(){ currentUser = null; hideAll(); screen = SCREEN.AUTH; authScreen.classList.remove('hidden'); switchAuth('login'); }
+
+  /* ========== 阶段5：成绩上报 + 排行榜（前后端联调） ========== */
+  // 对局结束自动把成绩写入 MySQL；游客（未登录）只提示不上报
+  async function saveRecord(sec, acc){
+    const el = $('goUpload');
+    if(!currentUser){
+      el.className = 'upload';
+      el.textContent = '游客模式 · 成绩未上传（登录后可参与排行）';
+      return;
+    }
+    el.className = 'upload'; el.textContent = '成绩上传中…';
+    try{
+      const data = await apiPost('/save_game_record', {
+        user_id: currentUser.user_id,
+        total_score: score,
+        correct_rate: acc,
+        play_duration: Math.max(1, Math.round(sec))
+      });
+      if(data.ok){
+        el.className = 'upload ok';
+        el.textContent = '成绩已上传 · 记录 #' + data.record_id + '（' + currentUser.username + '）';
+      } else {
+        el.className = 'upload err';
+        el.textContent = '上传失败：' + (data.msg || '未知错误');
+      }
+    }catch(e){
+      el.className = 'upload err';
+      el.textContent = '上传失败：无法连接后端服务（请确认 FastAPI 已启动）';
+    }
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  let rankFrom = 'start';   // 排行榜返回目标：start | over
+  async function loadRank(){
+    const box = $('rankList');
+    box.innerHTML = '<div class="rank-empty">加载中…</div>';
+    try{
+      const res = await fetch(API_BASE + '/get_rank');
+      const data = await res.json();
+      if(!data.ok || !data.rank || !data.rank.length){
+        box.innerHTML = '<div class="rank-empty">暂无对局记录，快去打一局吧</div>';
+        return;
+      }
+      let html = '<div class="rank-row head"><span>名次</span><span>玩家</span>'
+               + '<span style="text-align:right">得分</span><span style="text-align:right">正确率</span></div>';
+      data.rank.forEach(function(r){
+        html += '<div class="rank-row' + (r.rank <= 3 ? ' top3' : '') + '">'
+              + '<span class="no">' + r.rank + '</span>'
+              + '<span>' + escapeHtml(r.username) + '</span>'
+              + '<span class="sc">' + r.total_score + '</span>'
+              + '<span class="ac">' + Number(r.correct_rate).toFixed(1) + '%</span>'
+              + '</div>';
+      });
+      box.innerHTML = html;
+    }catch(e){
+      box.innerHTML = '<div class="rank-empty">无法连接后端服务，请确认 FastAPI 已启动</div>';
+    }
+  }
+  function showRank(from){
+    rankFrom = from || 'start';
+    hideAll();
+    rankScreen.classList.remove('hidden');
+    loadRank();
+  }
+  function closeRank(){
+    hideAll();
+    if(rankFrom === 'over'){ screen = SCREEN.OVER; overScreen.classList.remove('hidden'); }
+    else { screen = SCREEN.START; startScreen.classList.remove('hidden'); }
+  }
+
   /* ========== 流程控制 ========== */
   function startGame(key){
     diffKey = key;
@@ -356,6 +592,8 @@
     $('goSpeed').textContent = cpm;
     $('goLevel').textContent = level;
     $('goBest').textContent = best;
+    // 阶段5：先把成绩上报后端（异步，不阻塞结算界面渲染）
+    saveRecord(sec, acc);
     overScreen.classList.remove('hidden');
     sound('over');
   }
@@ -535,7 +773,7 @@
   function draw(){
     ctx.fillStyle = '#070b1a'; ctx.fillRect(0,0,W,H);
     drawStars();
-    if(screen !== SCREEN.START){ drawEnemies(); drawBullets(); drawParticles(); drawPlayer(); drawHUD(); }
+    if(screen === SCREEN.PLAYING || screen === SCREEN.PAUSED || screen === SCREEN.OVER){ drawEnemies(); drawBullets(); drawParticles(); drawPlayer(); drawHUD(); }
     if(missFlash > 0){ ctx.fillStyle = 'rgba(255,60,60,'+(missFlash*0.22)+')'; ctx.fillRect(0,0,W,H); }
   }
 
@@ -553,10 +791,28 @@
   document.querySelectorAll('[data-diff]').forEach(function(btn){
     btn.addEventListener('click', function(){ startGame(btn.getAttribute('data-diff')); });
   });
+  // 阶段3：账号界面事件
+  $('tabLogin').addEventListener('click', function(){ switchAuth('login'); });
+  $('tabReg').addEventListener('click', function(){ switchAuth('reg'); });
+  $('loginForm').addEventListener('submit', doLogin);
+  $('regForm').addEventListener('submit', doRegister);
+  $('guestLink').addEventListener('click', function(){ enterGameFromAuth(null); });
+  // 中文输入法组词时按 Enter 是"选词"，不应触发表单提交
+  ['regUser','loginUser'].forEach(function(id){
+    $(id).addEventListener('keydown', function(e){
+      if(e.key === 'Enter' && (e.isComposing || e.keyCode === 229)) e.preventDefault();
+    });
+  });
+  $('logoutBtn').addEventListener('click', doLogout);
   $('resumeBtn').addEventListener('click', resume);
   $('pauseMenuBtn').addEventListener('click', toMenu);
   $('againBtn').addEventListener('click', function(){ startGame(diffKey); });
   $('menuBtn').addEventListener('click', toMenu);
+  // 阶段5：排行榜入口与返回
+  $('rankBtn').addEventListener('click', function(){ showRank('start'); });
+  $('overRankBtn').addEventListener('click', function(){ showRank('over'); });
+  $('rankRefresh').addEventListener('click', loadRank);
+  $('rankBack').addEventListener('click', closeRank);
   // 点击 Canvas 上的「主界面」按钮（考虑页面缩放）
   canvas.addEventListener('click', function(ev){
     if(screen !== SCREEN.PLAYING && screen !== SCREEN.PAUSED) return;
@@ -570,6 +826,7 @@
 
   window.addEventListener('keydown', function(e){
     if(e.code === 'Escape'){
+      if(!rankScreen.classList.contains('hidden')){ e.preventDefault(); closeRank(); return; }
       if(screen === SCREEN.PLAYING || screen === SCREEN.PAUSED){ e.preventDefault(); toMenu(); }
       return;
     }

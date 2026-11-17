@@ -1,1 +1,13 @@
-pinyin-defense/
+# 本地敏感配置（数据库密码），绝不提交
+.env
+backend/.env
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 系统文件
+.DS_Store
+Thumbs.db
