@@ -21,19 +21,20 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY  uk_username (username)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
--- 3. 成绩表：每个用户仅一条记录，同时保存最近一局得分与历史最高分
+-- 3. 成绩表：每个(用户,难度)一条记录，同一玩家玩过多个难度就有多条，
+--    因此在排行榜三个难度组里都能看到同一玩家。每条记录各自维护"该难度最近一局"与"该难度历史最高"。
 CREATE TABLE IF NOT EXISTS game_records (
   record_id     INT UNSIGNED   NOT NULL AUTO_INCREMENT COMMENT '记录ID，主键自增',
-  user_id       INT UNSIGNED   NOT NULL                COMMENT '用户ID，唯一，外键关联 users.user_id',
-  total_score   INT UNSIGNED   NOT NULL DEFAULT 0      COMMENT '最近一局得分（每次覆盖）',
-  difficulty    VARCHAR(10)    NOT NULL DEFAULT 'easy' COMMENT '最近一局难度(easy/normal/hard)',
-  best_score    INT UNSIGNED   NOT NULL DEFAULT 0      COMMENT '历史最高分（只升不降）',
-  best_difficulty VARCHAR(10)  NOT NULL DEFAULT 'easy' COMMENT '取得最高分时的难度',
-  correct_rate  DECIMAL(5,2)   NOT NULL DEFAULT 0.00   COMMENT '正确率(百分比，如 92.50)',
-  play_duration INT UNSIGNED   NOT NULL DEFAULT 0      COMMENT '游玩时长(秒)',
-  play_time     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '对局发生时间',
+  user_id       INT UNSIGNED   NOT NULL                COMMENT '用户ID，外键关联 users.user_id',
+  total_score   INT UNSIGNED   NOT NULL DEFAULT 0      COMMENT '该难度最近一局得分（每次覆盖）',
+  difficulty    VARCHAR(10)    NOT NULL DEFAULT 'easy' COMMENT '难度(easy/normal/hard)，与 user_id 组成唯一键',
+  best_score    INT UNSIGNED   NOT NULL DEFAULT 0      COMMENT '该难度历史最高分（只升不降）',
+  best_difficulty VARCHAR(10)  NOT NULL DEFAULT 'easy' COMMENT '兼容字段，恒等于本行 difficulty',
+  correct_rate  DECIMAL(5,2)   NOT NULL DEFAULT 0.00   COMMENT '最近一局正确率(百分比，如 92.50)',
+  play_duration INT UNSIGNED   NOT NULL DEFAULT 0      COMMENT '最近一局游玩时长(秒)',
+  play_time     DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近一局发生时间',
   PRIMARY KEY (record_id),
-  UNIQUE KEY uk_user_id (user_id),
+  UNIQUE KEY uk_user_difficulty (user_id, difficulty),
   CONSTRAINT fk_records_user FOREIGN KEY (user_id)
     REFERENCES users (user_id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='成绩表（每人一条：最近得分 + 最高分及其难度）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='成绩表（每人每难度一条：该难度最近得分 + 该难度最高分）';

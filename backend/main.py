@@ -116,31 +116,30 @@ def save_game_record(body: RecordIn):
     if not user:
         return {"ok": False, "msg": "用户不存在"}
 
-    # 每个用户只保留一条记录：
-    #   total_score / difficulty / 正确率 / 时长 / 时间 = 最近一局（每次都覆盖）
-    #   best_score / best_difficulty = 历史最高分及其取得难度（只升不降）
-    # best_difficulty 的 IF 判断必须写在 best_score 更新之前，否则会读到已刷新的最高分。
-    # 唯一索引 uk_user_id 保证并发下也不会产生同一用户的多条记录。
+    # 每个(用户, 难度)一条记录：同一玩家玩过三个难度就会有三条，
+    # 于是在排行榜三个难度组里都能看到他/她（见需求：一人可同时上榜多个难度）。
+    #   total_score / correct_rate / play_duration / play_time = 该难度最近一局（每次覆盖）
+    #   best_score = 该难度历史最高分（GREATEST，只升不降）
+    #   best_difficulty 恒等于本行 difficulty（保留字段仅为兼容旧前端/文档）
+    # 唯一索引 uk_user_difficulty(user_id, difficulty) 保证每个难度恰好一条。
     execute(
         """INSERT INTO game_records
            (user_id, total_score, difficulty, best_score, best_difficulty,
             correct_rate, play_duration, play_time)
            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
            ON DUPLICATE KEY UPDATE
-             difficulty      = VALUES(difficulty),
              total_score     = VALUES(total_score),
              correct_rate    = VALUES(correct_rate),
              play_duration   = VALUES(play_duration),
              play_time       = NOW(),
-             best_difficulty = IF(VALUES(total_score) > best_score,
-                                  VALUES(difficulty), best_difficulty),
              best_score      = GREATEST(best_score, VALUES(total_score))""",
         (body.user_id, body.total_score, body.difficulty,
          body.total_score, body.difficulty,
          round(body.correct_rate, 2), body.play_duration),
     )
     # UPSERT 更新分支的 lastrowid 不可靠，回查一次拿稳定的 record_id
-    row = query_one("SELECT record_id FROM game_records WHERE user_id=%s", (body.user_id,))
+    row = query_one("SELECT record_id FROM game_records WHERE user_id=%s AND difficulty=%s",
+                    (body.user_id, body.difficulty))
     return {"ok": True, "record_id": row["record_id"]}
 
 
@@ -153,7 +152,7 @@ def get_rank():
                   r.play_duration, r.play_time
            FROM game_records r JOIN users u ON r.user_id = u.user_id
            ORDER BY r.best_score DESC, r.play_duration ASC
-           LIMIT 30"""
+           LIMIT 60"""
     )
     # 统一转为可 JSON 序列化结构（Decimal / datetime → float / str）
     rank = []
