@@ -75,6 +75,8 @@
   .rank-row.top3 .no{color:#ffd166}
   .rank-row .sc{text-align:right;font-weight:700;color:#ffd166}
   .rank-row .bs{text-align:right;font-weight:700;color:#6cff9e}
+  .rank-row .bs-tag{font-size:10px;font-weight:400;opacity:.75;margin-left:2px;
+       padding:0 3px;border:1px solid rgba(108,255,158,.4);border-radius:4px}
   .rank-row .ac{text-align:right;color:#8fb6ff}
   .rank-empty{padding:28px 0;text-align:center;font-size:13px;color:#6f82ad}
   .rank-list::-webkit-scrollbar{width:6px}
@@ -178,7 +180,7 @@
   <div id="rankScreen" class="screen hidden">
     <div class="panel" style="width:620px">
       <h1 style="font-size:40px">排 行 榜</h1>
-      <p class="sub">按最高分所属难度分组 · 组内按最高分降序 · 本次为最近一局</p>
+      <p class="sub">按最近一局难度分组 · 组内按本次得分降序 · 最高为历史纪录(角标注明难度)</p>
       <div class="rank-list" id="rankList"></div>
       <div class="row-btns" style="margin-top:18px">
         <button id="rankRefresh" style="font-size:13px;padding:8px 18px">刷新</button>
@@ -538,20 +540,28 @@
         box.innerHTML = '<div class="rank-empty">暂无对局记录，快去打一局吧</div>';
         return;
       }
-      // 按"最高分取得的难度"分成三个区块，避免初级与高级分数直接混排比较
+      // 按"最近一局难度"分成三个区块：玩家刚玩中级就出现在中级组，
+      // 不再因历史最高分是初级而被误归入初级组（修复分组维度错误）。
       const groups = [
         {key:'easy',   label:'初级难度'},
         {key:'normal', label:'中级难度'},
         {key:'hard',   label:'高级难度'}
       ];
+      const diffLabel = {easy:'初', normal:'中', hard:'高'};
       const head = '<div class="rank-row head"><span>名次</span><span>玩家</span>'
                  + '<span style="text-align:right">本次</span>'
                  + '<span style="text-align:right">最高</span>'
                  + '<span style="text-align:right">正确率</span></div>';
       let html = '';
       groups.forEach(function(g){
+        // 归组依据是最近一局难度 difficulty；旧后端缺该字段时回退到最高分难度
         const rows = data.rank.filter(function(r){
-          return (r.best_difficulty || 'easy') === g.key;
+          const d = r.difficulty || r.best_difficulty || 'easy';
+          return d === g.key;
+        }).sort(function(a, b){
+          // 组内按本次得分降序，同分按用时短者优先
+          if(b.total_score !== a.total_score) return b.total_score - a.total_score;
+          return a.play_duration - b.play_duration;
         }).slice(0, 10);
         html += '<div class="rank-group"><div class="rank-group-title gd-' + g.key + '">'
               + g.label + '</div>';
@@ -561,11 +571,14 @@
           html += head;
           rows.forEach(function(r, i){
             const best = (r.best_score == null ? r.total_score : r.best_score);
+            // 最高分可能来自其他难度，附角标说明其归属，避免误读为本难度成绩
+            const bd = r.best_difficulty || r.difficulty || 'easy';
+            const tag = '<small class="bs-tag">' + (diffLabel[bd] || '初') + '</small>';
             html += '<div class="rank-row' + (i < 3 ? ' top3' : '') + '">'
                   + '<span class="no">' + (i+1) + '</span>'
                   + '<span>' + escapeHtml(r.username) + '</span>'
                   + '<span class="sc">' + r.total_score + '</span>'
-                  + '<span class="bs">' + best + '</span>'
+                  + '<span class="bs">' + best + tag + '</span>'
                   + '<span class="ac">' + Number(r.correct_rate).toFixed(1) + '%</span>'
                   + '</div>';
           });
