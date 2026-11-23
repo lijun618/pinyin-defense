@@ -61,13 +61,14 @@
   .upload.err{color:#ff8a8a}
   .rank-list{margin:18px 0 4px;max-height:300px;overflow-y:auto;text-align:left;
        font-size:14px;color:#bcd0f5}
-  .rank-row{display:grid;grid-template-columns:46px 1fr 82px 74px;gap:8px;align-items:center;
+  .rank-row{display:grid;grid-template-columns:40px 1fr 70px 70px 62px;gap:6px;align-items:center;
        padding:9px 10px;border-bottom:1px solid rgba(120,160,255,.12)}
   .rank-row.head{font-size:12px;letter-spacing:1px;color:#7f93c4;
        border-bottom-color:rgba(120,160,255,.3)}
   .rank-row .no{font-weight:700;color:#7fd0ff}
   .rank-row.top3 .no{color:#ffd166}
   .rank-row .sc{text-align:right;font-weight:700;color:#ffd166}
+  .rank-row .bs{text-align:right;font-weight:700;color:#6cff9e}
   .rank-row .ac{text-align:right;color:#8fb6ff}
   .rank-empty{padding:28px 0;text-align:center;font-size:13px;color:#6f82ad}
   .rank-list::-webkit-scrollbar{width:6px}
@@ -531,12 +532,17 @@
         return;
       }
       let html = '<div class="rank-row head"><span>名次</span><span>玩家</span>'
-               + '<span style="text-align:right">得分</span><span style="text-align:right">正确率</span></div>';
+               + '<span style="text-align:right">本次</span>'
+               + '<span style="text-align:right">最高</span>'
+               + '<span style="text-align:right">正确率</span></div>';
       data.rank.forEach(function(r){
+        // 兼容旧版后端未返回 best_score 的情况
+        const best = (r.best_score == null ? r.total_score : r.best_score);
         html += '<div class="rank-row' + (r.rank <= 3 ? ' top3' : '') + '">'
               + '<span class="no">' + r.rank + '</span>'
               + '<span>' + escapeHtml(r.username) + '</span>'
               + '<span class="sc">' + r.total_score + '</span>'
+              + '<span class="bs">' + best + '</span>'
               + '<span class="ac">' + Number(r.correct_rate).toFixed(1) + '%</span>'
               + '</div>';
       });

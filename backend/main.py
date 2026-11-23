@@ -115,20 +115,34 @@ def save_game_record(body: RecordIn):
     if not user:
         return {"ok": False, "msg": "用户不存在"}
 
-    record_id, _ = execute(
+    # 每个用户只保留一条记录，两条分数并存：
+    #   total_score = 最近一局得分（每次都覆盖，无论高低）
+    #   best_score  = 历史最高分（GREATEST，只升不降）
+    # 正确率/时长/时间跟随最近一局，反映"最近一次游戏"的表现。
+    # 唯一索引 uk_user_id 保证并发下也不会产生同一用户的多条记录。
+    execute(
         """INSERT INTO game_records
-           (user_id, total_score, correct_rate, play_duration, play_time)
-           VALUES (%s, %s, %s, %s, NOW())""",
-        (body.user_id, body.total_score, round(body.correct_rate, 2), body.play_duration),
+           (user_id, total_score, best_score, correct_rate, play_duration, play_time)
+           VALUES (%s, %s, %s, %s, %s, NOW())
+           ON DUPLICATE KEY UPDATE
+             total_score   = VALUES(total_score),
+             correct_rate  = VALUES(correct_rate),
+             play_duration = VALUES(play_duration),
+             play_time     = NOW(),
+             best_score    = GREATEST(best_score, VALUES(total_score))""",
+        (body.user_id, body.total_score, body.total_score,
+         round(body.correct_rate, 2), body.play_duration),
     )
-    return {"ok": True, "record_id": record_id}
+    # UPSERT 更新分支的 lastrowid 不可靠，回查一次拿稳定的 record_id
+    row = query_one("SELECT record_id FROM game_records WHERE user_id=%s", (body.user_id,))
+    return {"ok": True, "record_id": row["record_id"]}
 
 
 # ========== 接口4：排行榜 Top10 ==========
 @app.get("/get_rank")
 def get_rank():
     rows = query_all(
-        """SELECT r.record_id, u.username, r.total_score, r.correct_rate,
+        """SELECT r.record_id, u.username, r.total_score, r.best_score, r.correct_rate,
                   r.play_duration, r.play_time
            FROM game_records r JOIN users u ON r.user_id = u.user_id
            ORDER BY r.total_score DESC, r.play_duration ASC
@@ -141,6 +155,7 @@ def get_rank():
             "rank": i,
             "username": r["username"],
             "total_score": r["total_score"],
+            "best_score": r["best_score"],
             "correct_rate": float(r["correct_rate"]),
             "play_duration": r["play_duration"],
             "play_time": r["play_time"].strftime("%Y-%m-%d %H:%M:%S"),
