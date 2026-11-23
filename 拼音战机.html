@@ -59,8 +59,14 @@
   .upload{min-height:16px;margin-top:12px;font-size:12px;color:#6f82ad}
   .upload.ok{color:#6cff9e}
   .upload.err{color:#ff8a8a}
-  .rank-list{margin:18px 0 4px;max-height:300px;overflow-y:auto;text-align:left;
+  .rank-list{margin:14px 0 4px;max-height:430px;overflow-y:auto;text-align:left;
        font-size:14px;color:#bcd0f5}
+  .rank-group{margin-bottom:14px}
+  .rank-group-title{font-size:13px;font-weight:700;letter-spacing:1px;padding:5px 10px;
+       margin-bottom:4px;border-left:3px solid;background:rgba(120,160,255,.06)}
+  .rank-group-title.gd-easy{color:#4ade80;border-color:#4ade80}
+  .rank-group-title.gd-normal{color:#60a5fa;border-color:#60a5fa}
+  .rank-group-title.gd-hard{color:#f87171;border-color:#f87171}
   .rank-row{display:grid;grid-template-columns:40px 1fr 70px 70px 62px;gap:6px;align-items:center;
        padding:9px 10px;border-bottom:1px solid rgba(120,160,255,.12)}
   .rank-row.head{font-size:12px;letter-spacing:1px;color:#7f93c4;
@@ -172,7 +178,7 @@
   <div id="rankScreen" class="screen hidden">
     <div class="panel" style="width:620px">
       <h1 style="font-size:40px">排 行 榜</h1>
-      <p class="sub">TOP 10 · 按最高分降序</p>
+      <p class="sub">按最高分所属难度分组 · 组内按最高分降序 · 本次为最近一局</p>
       <div class="rank-list" id="rankList"></div>
       <div class="row-btns" style="margin-top:18px">
         <button id="rankRefresh" style="font-size:13px;padding:8px 18px">刷新</button>
@@ -501,7 +507,8 @@
         user_id: currentUser.user_id,
         total_score: score,
         correct_rate: acc,
-        play_duration: Math.max(1, Math.round(sec))
+        play_duration: Math.max(1, Math.round(sec)),
+        difficulty: diffKey
       });
       if(data.ok){
         el.className = 'upload ok';
@@ -531,20 +538,39 @@
         box.innerHTML = '<div class="rank-empty">暂无对局记录，快去打一局吧</div>';
         return;
       }
-      let html = '<div class="rank-row head"><span>名次</span><span>玩家</span>'
-               + '<span style="text-align:right">本次</span>'
-               + '<span style="text-align:right">最高</span>'
-               + '<span style="text-align:right">正确率</span></div>';
-      data.rank.forEach(function(r){
-        // 兼容旧版后端未返回 best_score 的情况
-        const best = (r.best_score == null ? r.total_score : r.best_score);
-        html += '<div class="rank-row' + (r.rank <= 3 ? ' top3' : '') + '">'
-              + '<span class="no">' + r.rank + '</span>'
-              + '<span>' + escapeHtml(r.username) + '</span>'
-              + '<span class="sc">' + r.total_score + '</span>'
-              + '<span class="bs">' + best + '</span>'
-              + '<span class="ac">' + Number(r.correct_rate).toFixed(1) + '%</span>'
-              + '</div>';
+      // 按"最高分取得的难度"分成三个区块，避免初级与高级分数直接混排比较
+      const groups = [
+        {key:'easy',   label:'初级难度'},
+        {key:'normal', label:'中级难度'},
+        {key:'hard',   label:'高级难度'}
+      ];
+      const head = '<div class="rank-row head"><span>名次</span><span>玩家</span>'
+                 + '<span style="text-align:right">本次</span>'
+                 + '<span style="text-align:right">最高</span>'
+                 + '<span style="text-align:right">正确率</span></div>';
+      let html = '';
+      groups.forEach(function(g){
+        const rows = data.rank.filter(function(r){
+          return (r.best_difficulty || 'easy') === g.key;
+        }).slice(0, 10);
+        html += '<div class="rank-group"><div class="rank-group-title gd-' + g.key + '">'
+              + g.label + '</div>';
+        if(!rows.length){
+          html += '<div class="rank-empty" style="padding:14px 0">暂无记录</div>';
+        }else{
+          html += head;
+          rows.forEach(function(r, i){
+            const best = (r.best_score == null ? r.total_score : r.best_score);
+            html += '<div class="rank-row' + (i < 3 ? ' top3' : '') + '">'
+                  + '<span class="no">' + (i+1) + '</span>'
+                  + '<span>' + escapeHtml(r.username) + '</span>'
+                  + '<span class="sc">' + r.total_score + '</span>'
+                  + '<span class="bs">' + best + '</span>'
+                  + '<span class="ac">' + Number(r.correct_rate).toFixed(1) + '%</span>'
+                  + '</div>';
+          });
+        }
+        html += '</div>';
       });
       box.innerHTML = html;
     }catch(e){

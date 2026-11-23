@@ -74,6 +74,7 @@ class RecordIn(BaseModel):
     total_score: int = Field(..., ge=0)
     correct_rate: float = Field(..., ge=0, le=100)
     play_duration: int = Field(..., ge=0, description="游玩时长(秒)")
+    difficulty: str = Field(..., pattern="^(easy|normal|hard)$", description="本局难度")
 
 
 # ========== 接口1：注册 ==========
@@ -115,22 +116,27 @@ def save_game_record(body: RecordIn):
     if not user:
         return {"ok": False, "msg": "用户不存在"}
 
-    # 每个用户只保留一条记录，两条分数并存：
-    #   total_score = 最近一局得分（每次都覆盖，无论高低）
-    #   best_score  = 历史最高分（GREATEST，只升不降）
-    # 正确率/时长/时间跟随最近一局，反映"最近一次游戏"的表现。
+    # 每个用户只保留一条记录：
+    #   total_score / difficulty / 正确率 / 时长 / 时间 = 最近一局（每次都覆盖）
+    #   best_score / best_difficulty = 历史最高分及其取得难度（只升不降）
+    # best_difficulty 的 IF 判断必须写在 best_score 更新之前，否则会读到已刷新的最高分。
     # 唯一索引 uk_user_id 保证并发下也不会产生同一用户的多条记录。
     execute(
         """INSERT INTO game_records
-           (user_id, total_score, best_score, correct_rate, play_duration, play_time)
-           VALUES (%s, %s, %s, %s, %s, NOW())
+           (user_id, total_score, difficulty, best_score, best_difficulty,
+            correct_rate, play_duration, play_time)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
            ON DUPLICATE KEY UPDATE
-             total_score   = VALUES(total_score),
-             correct_rate  = VALUES(correct_rate),
-             play_duration = VALUES(play_duration),
-             play_time     = NOW(),
-             best_score    = GREATEST(best_score, VALUES(total_score))""",
-        (body.user_id, body.total_score, body.total_score,
+             difficulty      = VALUES(difficulty),
+             total_score     = VALUES(total_score),
+             correct_rate    = VALUES(correct_rate),
+             play_duration   = VALUES(play_duration),
+             play_time       = NOW(),
+             best_difficulty = IF(VALUES(total_score) > best_score,
+                                  VALUES(difficulty), best_difficulty),
+             best_score      = GREATEST(best_score, VALUES(total_score))""",
+        (body.user_id, body.total_score, body.difficulty,
+         body.total_score, body.difficulty,
          round(body.correct_rate, 2), body.play_duration),
     )
     # UPSERT 更新分支的 lastrowid 不可靠，回查一次拿稳定的 record_id
@@ -142,11 +148,12 @@ def save_game_record(body: RecordIn):
 @app.get("/get_rank")
 def get_rank():
     rows = query_all(
-        """SELECT r.record_id, u.username, r.total_score, r.best_score, r.correct_rate,
+        """SELECT r.record_id, u.username, r.total_score, r.difficulty,
+                  r.best_score, r.best_difficulty, r.correct_rate,
                   r.play_duration, r.play_time
            FROM game_records r JOIN users u ON r.user_id = u.user_id
-           ORDER BY r.total_score DESC, r.play_duration ASC
-           LIMIT 10"""
+           ORDER BY r.best_score DESC, r.play_duration ASC
+           LIMIT 30"""
     )
     # 统一转为可 JSON 序列化结构（Decimal / datetime → float / str）
     rank = []
@@ -155,7 +162,9 @@ def get_rank():
             "rank": i,
             "username": r["username"],
             "total_score": r["total_score"],
+            "difficulty": r["difficulty"],
             "best_score": r["best_score"],
+            "best_difficulty": r["best_difficulty"],
             "correct_rate": float(r["correct_rate"]),
             "play_duration": r["play_duration"],
             "play_time": r["play_time"].strftime("%Y-%m-%d %H:%M:%S"),
