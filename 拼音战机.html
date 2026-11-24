@@ -99,15 +99,15 @@
       <!-- 登录表单 -->
       <form id="loginForm" autocomplete="off">
         <div class="field"><label>用户名</label><input id="loginUser" type="text" maxlength="32" placeholder="请输入用户名"></div>
-        <div class="field"><label>密码</label><input id="loginPass" type="password" placeholder="请输入密码"></div>
+        <div class="field"><label>密码</label><input id="loginPass" type="password" autocomplete="new-password" placeholder="请输入密码"></div>
         <div id="loginMsg" class="auth-msg"></div>
         <button type="submit" class="auth-submit">登录并进入游戏</button>
       </form>
       <!-- 注册表单 -->
       <form id="regForm" class="hidden" autocomplete="off">
         <div class="field"><label>用户名</label><input id="regUser" type="text" maxlength="32" placeholder="3-32 位，支持中文/字母/数字/下划线"></div>
-        <div class="field"><label>密码</label><input id="regPass" type="password" maxlength="64" placeholder="至少 6 位"></div>
-        <div class="field"><label>确认密码</label><input id="regPass2" type="password" maxlength="64" placeholder="再次输入密码"></div>
+        <div class="field"><label>密码</label><input id="regPass" type="password" autocomplete="new-password" maxlength="64" placeholder="至少 6 位"></div>
+        <div class="field"><label>确认密码</label><input id="regPass2" type="password" autocomplete="new-password" maxlength="64" placeholder="再次输入密码"></div>
         <div id="regMsg" class="auth-msg"></div>
         <button type="submit" class="auth-submit">注册并进入游戏</button>
       </form>
@@ -423,6 +423,12 @@
 
   /* ========== 阶段3：登录 / 注册交互 ========== */
   let authMode = 'login';   // 当前表单：login | reg
+  // 安全：清空全部密码输入框；用户名保留，方便识别身份
+  function clearPasswords(){
+    $('loginPass').value = '';
+    $('regPass').value = '';
+    $('regPass2').value = '';
+  }
   function switchAuth(mode){
     authMode = mode;
     const isReg = mode === 'reg';
@@ -452,6 +458,7 @@
     return data;
   }
   function enterGameFromAuth(user){
+    clearPasswords();   // 进入游戏即清除明文密码，避免 DOM 中残留
     currentUser = user;
     hideAll(); screen = SCREEN.START; startScreen.classList.remove('hidden');
     // 更新开始页的登录态提示
@@ -492,7 +499,11 @@
       else authMsg('loginMsg', data.msg || '登录失败',false);
     }catch(e){ authMsg('loginMsg','无法连接后端服务，请确认 FastAPI 已启动',false); }
   }
-  function doLogout(){ currentUser = null; hideAll(); screen = SCREEN.AUTH; authScreen.classList.remove('hidden'); switchAuth('login'); }
+  function doLogout(){
+    currentUser = null;
+    clearPasswords();   // 退出后密码必须重新输入，不能一键登录
+    hideAll(); screen = SCREEN.AUTH; authScreen.classList.remove('hidden'); switchAuth('login');
+  }
 
   /* ========== 阶段5：成绩上报 + 排行榜（前后端联调） ========== */
   // 对局结束自动把成绩写入 MySQL；游客（未登录）只提示不上报
